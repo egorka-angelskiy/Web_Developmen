@@ -238,3 +238,106 @@ for item in ax1.get_xticklabels():
 
 for item in ax2.get_xticklabels(): 
     item.set_rotation(90)
+
+    
+    
+
+    
+    
+import http.client as cl
+import ssl
+import json
+import pandas
+conn = cl.HTTPSConnection('data.gov.ru', timeout=100,
+                          context=ssl._create_unverified_context())
+conn.request("GET", "https://data.gov.ru/api/json/dataset/?access_token=af5c23e400ef656d0c291c0cbe7238a4&search=2019")
+resp = conn.getresponse()
+print(resp.status, resp.reason)
+print(resp.getheaders())
+data = resp.read().decode()
+dt = pandas.read_json(data, typ='frame')
+print(dt)
+# Выводим первые 1024 байта скачанного датасета.
+print(data[0:1024])
+
+
+
+path_file = '/content/drive/MyDrive/python/dataset.hdf5'
+dt.to_hdf(path_file, key='datasets_2019', mode='w', format='table')
+fname = '/content/drive/MyDrive/python/dataset.hdf5'
+dt = pandas.read_hdf(fname, key = 'datasets_2019')
+print(dt) 
+dt_filt = dt[dt['title'].str.contains(r'студент')]
+print(dt_filt['title'])
+print(dt_filt[['title','identifier']]) 
+conn = cl.HTTPSConnection('data.gov.ru', timeout = 100, context=ssl._create_unverified_context())
+conn.request("GET", \
+"https://data.gov.ru/api/json/dataset/?access_token=af5c23e400ef656d0c291c0cbe7238a43&search=2019")
+resp = conn.getresponse()
+data = resp.read().decode()
+print(data[0:1024])
+
+
+
+import http.client as cl
+import ssl
+import json
+import pandas
+import xml.etree.ElementTree as et
+import xml.dom.minidom
+
+def Dt():
+    return pandas.read_hdf('/content/drive/MyDrive/python/dataset.hdf5', key='datasets_2019')
+
+def GetRequest(name, i):
+    return "https://data.gov.ru/api/json/dataset/" + Dt()['identifier'].iloc[i] + name
+
+
+def StrXml(js_data, i, ident_v, conn):
+    if js_data:
+        print(js_data)
+        request = "https://data.gov.ru/api/xml/dataset/"
+        request = request + Dt()['identifier'].iloc[i] + "/version/"
+        request = request + ident_v + "/content?access_token=af5c23e400ef656d0c291c0cbe7238a4"
+        conn.request("GET", request)
+        data_content = conn.getresponse().read().decode()
+        print(data_content[0:1024])
+
+        ParsXml(data_content)
+
+def ParsXml(data_content):
+    try:
+        parser = et.XMLParser(encoding="utf-8")
+        xroot = et.fromstring(data_content, parser=parser)
+        print(xroot.tag)
+        Out(xroot)
+    except BaseException:
+        print("programm error")
+
+def Out(xroot):
+    for rows in xroot.findall('rows'):
+        print("rows")
+        for row in rows.findall('row'):
+            print("row")
+            for value in row.findall('value'):
+                print(value.text)
+
+def main():
+    conn = cl.HTTPSConnection('data.gov.ru', timeout=100, context=ssl._create_unverified_context())
+    for i in range(20, 100):
+        print("identifier", Dt()['identifier'].iloc[i])
+        print("title", Dt()['title'].iloc[i])
+        conn.request("GET", GetRequest("/version/?access_token=af5c23e400ef656d0c291c0cbe7238a4", i))
+        try:
+            js_data = json.load(conn.getresponse())
+            print("version ", js_data[0]['created'])
+            ident_v = js_data[0]['created']
+            request = GetRequest("/version/", i) + ident_v + "/structure?access_token=af5c23e400ef656d0c291c0cbe7238a4"
+            conn.request("GET", request)
+            js_data = json.load(conn.getresponse())
+        except BaseException:
+            print("programm error")
+        StrXml(js_data, i, ident_v, conn)
+    conn.close()
+
+main()    
